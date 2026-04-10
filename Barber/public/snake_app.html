@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Barber Snake</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: #0f0f23;
+    --bg2: #1a1a2e;
+    --gold: #D4AF37;
+    --gold-dark: #B8960C;
+    --cream: #F5F0E1;
+    --red: #E74C3C;
+    --hint: #8888aa;
+    --green: #2ECC71;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--cream);
+    display: flex; flex-direction: column; align-items: center;
+    min-height: 100vh;
+    overflow-x: hidden;
+    -webkit-user-select: none; user-select: none;
+    touch-action: manipulation;
+  }
+
+  /* ---- Barber Pole Stripe ---- */
+  .barber-stripe {
+    width: 100%; height: 6px;
+    background: repeating-linear-gradient(
+      -45deg,
+      #E74C3C 0px, #E74C3C 10px,
+      #fff 10px, #fff 20px,
+      #3498DB 20px, #3498DB 30px,
+      #fff 30px, #fff 40px
+    );
+    background-size: 56px 6px;
+    animation: stripe-scroll 2s linear infinite;
+  }
+  @keyframes stripe-scroll {
+    to { background-position: 56px 0; }
+  }
+
+  /* ---- Screens ---- */
+  .screen {
+    width: 100%; max-width: 420px;
+    padding: 16px;
+    display: flex; flex-direction: column; align-items: center;
+    opacity: 1; transition: opacity 0.3s ease;
+  }
+  .screen.hidden {
+    display: none !important;
+    opacity: 0;
+  }
+
+  /* ---- Menu Screen ---- */
+  .title {
+    font-size: 28px; font-weight: 800;
+    color: var(--gold);
+    margin: 20px 0 4px;
+    letter-spacing: 1px;
+    text-align: center;
+  }
+  .title-icon { font-size: 24px; }
+  .subtitle {
+    font-size: 13px; color: var(--hint);
+    margin-bottom: 20px; text-align: center;
+  }
+
+  .btn {
+    border: none; border-radius: 12px;
+    padding: 16px 32px; font-size: 17px; font-weight: 700;
+    cursor: pointer; margin: 6px 0;
+    transition: transform 0.15s, opacity 0.15s;
+    width: 100%; max-width: 320px;
+    text-align: center;
+  }
+  .btn:active { transform: scale(0.96); opacity: 0.85; }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--gold), var(--gold-dark));
+    color: #1a1a00;
+    box-shadow: 0 4px 16px rgba(212, 175, 55, 0.3);
+  }
+  .btn-secondary {
+    background: var(--bg2);
+    color: var(--cream);
+    border: 1px solid rgba(212, 175, 55, 0.3);
+  }
+
+  /* ---- Leaderboard ---- */
+  .leaderboard {
+    width: 100%; max-width: 360px;
+    margin-top: 20px;
+  }
+  .lb-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 10px;
+  }
+  .lb-header h2 { font-size: 18px; color: var(--gold); font-weight: 700; }
+  .lb-toggle {
+    background: none; border: none; color: var(--gold);
+    font-size: 13px; cursor: pointer; font-weight: 600;
+    padding: 4px 8px;
+  }
+  .lb-toggle:active { opacity: 0.7; }
+
+  .lb-list { list-style: none; }
+  .lb-item {
+    display: flex; align-items: center;
+    padding: 10px 14px; margin-bottom: 4px;
+    background: var(--bg2);
+    border-radius: 10px;
+    transition: background 0.2s;
+  }
+  .lb-item:nth-child(1) { border-left: 3px solid #FFD700; }
+  .lb-item:nth-child(2) { border-left: 3px solid #C0C0C0; }
+  .lb-item:nth-child(3) { border-left: 3px solid #CD7F32; }
+  .lb-rank {
+    width: 32px; font-size: 16px; font-weight: 700;
+    text-align: center; flex-shrink: 0;
+  }
+  .lb-name { flex: 1; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lb-score { font-size: 15px; font-weight: 700; color: var(--gold); margin-left: 12px; }
+
+  .lb-empty {
+    text-align: center; padding: 24px;
+    color: var(--hint); font-size: 14px;
+  }
+
+  .lb-expanded {
+    max-height: 50vh; overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--gold-dark) var(--bg);
+  }
+
+  /* ---- Game Screen ---- */
+  .game-header {
+    display: flex; justify-content: center; align-items: center;
+    padding: 10px 0 8px; width: 100%;
+  }
+  .score-display {
+    font-size: 20px; font-weight: 700; color: var(--cream);
+    transition: text-shadow 0.3s;
+  }
+  .score-display.glow {
+    text-shadow: 0 0 12px var(--gold), 0 0 24px rgba(212, 175, 55, 0.5);
+  }
+
+  #gameCanvas {
+    border: 2px solid var(--gold-dark);
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(212, 175, 55, 0.15), inset 0 0 30px rgba(0,0,0,0.3);
+    touch-action: none;
+  }
+
+  /* ---- D-Pad Controls ---- */
+  .dpad {
+    margin-top: 16px;
+    display: grid;
+    grid-template-areas:
+      ".  up  ."
+      "left . right"
+      ".  down .";
+    grid-template-columns: 64px 64px 64px;
+    grid-template-rows: 56px 56px 56px;
+    gap: 6px;
+    justify-content: center;
+  }
+  .dpad-btn {
+    background: rgba(212, 175, 55, 0.15);
+    border: 1px solid rgba(212, 175, 55, 0.3);
+    border-radius: 14px;
+    color: var(--gold);
+    font-size: 22px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: background 0.1s, transform 0.1s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .dpad-btn:active {
+    background: rgba(212, 175, 55, 0.35);
+    transform: scale(0.92);
+  }
+  .dpad-btn[data-dir="up"]    { grid-area: up; }
+  .dpad-btn[data-dir="down"]  { grid-area: down; }
+  .dpad-btn[data-dir="left"]  { grid-area: left; }
+  .dpad-btn[data-dir="right"] { grid-area: right; }
+
+  /* ---- Name Input Overlay ---- */
+  .overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.8);
+    display: flex; justify-content: center; align-items: center;
+    z-index: 100;
+    opacity: 1; transition: opacity 0.25s;
+  }
+  .overlay.hidden { display: none !important; opacity: 0; }
+
+  .overlay-box {
+    background: var(--bg2);
+    border: 1px solid var(--gold-dark);
+    border-radius: 16px; padding: 28px; text-align: center;
+    width: 90%; max-width: 320px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  .overlay-box h3 {
+    margin-bottom: 16px; font-size: 20px; color: var(--gold);
+  }
+  .overlay-box input {
+    width: 100%; padding: 14px; font-size: 16px;
+    border: 1px solid rgba(212, 175, 55, 0.3);
+    border-radius: 10px; margin-bottom: 16px;
+    background: var(--bg);
+    color: var(--cream);
+    outline: none;
+  }
+  .overlay-box input:focus {
+    border-color: var(--gold);
+    box-shadow: 0 0 8px rgba(212, 175, 55, 0.2);
+  }
+
+  /* ---- Game Over ---- */
+  .game-over-box h2 { font-size: 24px; color: var(--red); margin-bottom: 8px; }
+  .final-score {
+    font-size: 48px; font-weight: 800; margin: 12px 0;
+    color: var(--gold);
+    text-shadow: 0 0 16px rgba(212, 175, 55, 0.5);
+  }
+  .rank-text {
+    font-size: 14px; color: var(--hint); margin-bottom: 20px;
+  }
+  .game-over-btns { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+
+  /* ---- Floating Score Popup ---- */
+  .score-popup {
+    position: absolute; pointer-events: none;
+    font-size: 18px; font-weight: 800; color: var(--gold);
+    animation: float-up 0.8s ease-out forwards;
+    z-index: 50;
+  }
+  @keyframes float-up {
+    0% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-40px); }
+  }
+
+  /* ---- Confetti ---- */
+  .confetti-piece {
+    position: fixed; width: 8px; height: 8px;
+    border-radius: 2px; pointer-events: none;
+    animation: confetti-fall 1.5s ease-out forwards;
+    z-index: 200;
+  }
+  @keyframes confetti-fall {
+    0% { opacity: 1; transform: translateY(0) rotate(0deg); }
+    100% { opacity: 0; transform: translateY(80vh) rotate(720deg); }
+  }
+</style>
+</head>
+<body>
+
+<div class="barber-stripe"></div>
+
+<!-- ====== MENU SCREEN ====== -->
+<div id="menuScreen" class="screen">
+  <div class="title"><span class="title-icon">&#9986;</span> BARBER SNAKE</div>
+  <div class="subtitle">Play while you wait</div>
+
+  <button class="btn btn-primary" onclick="handleStartGame()">START GAME</button>
+
+  <div class="leaderboard">
+    <div class="lb-header">
+      <h2>Leaderboard</h2>
+      <button class="lb-toggle" id="lbToggle" onclick="toggleLeaderboard()">Show all</button>
+    </div>
+    <ul class="lb-list" id="leaderboardList">
+      <li class="lb-empty">Loading...</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ====== GAME SCREEN ====== -->
+<div id="gameScreen" class="screen hidden">
+  <div class="game-header">
+    <div class="score-display" id="scoreDisplay">Score: <span id="scoreText">0</span></div>
+  </div>
+  <canvas id="gameCanvas"></canvas>
+  <div class="dpad" id="dpad">
+    <button class="dpad-btn" data-dir="up" ontouchstart="dpadPress('up', event)" onmousedown="dpadPress('up', event)">&#9650;</button>
+    <button class="dpad-btn" data-dir="left" ontouchstart="dpadPress('left', event)" onmousedown="dpadPress('left', event)">&#9664;</button>
+    <button class="dpad-btn" data-dir="right" ontouchstart="dpadPress('right', event)" onmousedown="dpadPress('right', event)">&#9654;</button>
+    <button class="dpad-btn" data-dir="down" ontouchstart="dpadPress('down', event)" onmousedown="dpadPress('down', event)">&#9660;</button>
+  </div>
+</div>
+
+<!-- ====== NAME INPUT OVERLAY ====== -->
+<div id="nameOverlay" class="overlay hidden">
+  <div class="overlay-box">
+    <h3>Enter Your Name</h3>
+    <input type="text" id="playerNameInput" placeholder="Your name" maxlength="30" autocomplete="off">
+    <button class="btn btn-primary" onclick="startGameWithName()">Play!</button>
+  </div>
+</div>
+
+<!-- ====== GAME OVER OVERLAY ====== -->
+<div id="gameOverOverlay" class="overlay hidden">
+  <div class="overlay-box game-over-box">
+    <h2>Game Over</h2>
+    <div class="final-score" id="finalScore">0</div>
+    <div class="rank-text" id="rankText"></div>
+    <div class="game-over-btns">
+      <button class="btn btn-primary" onclick="playAgain()">Play Again</button>
+      <button class="btn btn-secondary" onclick="backToMenu()">Back to Menu</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---- Config ----
+const API_BASE = window.location.origin;
+const GRID = 20;
+const BASE_SPEED = 200;
+const SPEED_DECREASE = 5;
+const MIN_SPEED = 80;
+let COLS, ROWS, CELL;
+
+let tg = window.Telegram && window.Telegram.WebApp;
+if (tg) { tg.expand(); tg.disableVerticalSwipes && tg.disableVerticalSwipes(); }
+
+let playerName = localStorage.getItem('barber_snake_name') || '';
+let snake, direction, nextDirection, food, score, gameLoop, gameRunning, currentSpeed;
+let leaderboardData = [];
+let leaderboardExpanded = false;
+let floatingScores = [];
+
+// ---- Canvas Setup ----
+function setupCanvas() {
+  const canvas = document.getElementById('gameCanvas');
+  const maxW = Math.min(window.innerWidth - 32, 380);
+  CELL = Math.floor(maxW / GRID);
+  COLS = GRID; ROWS = GRID;
+  canvas.width = COLS * CELL;
+  canvas.height = ROWS * CELL;
+  return canvas;
+}
+
+// ---- Leaderboard ----
+async function loadLeaderboard(limit) {
+  limit = limit || 5;
+  try {
+    const res = await fetch(API_BASE + '/api/leaderboard?limit=' + limit);
+    const data = await res.json();
+    leaderboardData = data;
+    renderLeaderboard(data);
+  } catch (e) {
+    document.getElementById('leaderboardList').innerHTML =
+      '<li class="lb-empty">Could not load leaderboard</li>';
+  }
+}
+
+function renderLeaderboard(data) {
+  const list = document.getElementById('leaderboardList');
+  const toggle = document.getElementById('lbToggle');
+
+  if (!data.length) {
+    list.innerHTML = '<li class="lb-empty">No scores yet. Be the first!</li>';
+    toggle.style.display = 'none';
+    return;
+  }
+
+  toggle.style.display = 'inline';
+  const medals = ['&#129351;', '&#129352;', '&#129353;'];
+
+  list.innerHTML = data.map((entry, i) => {
+    const rank = i < 3 ? medals[i] : (i + 1);
+    return `<li class="lb-item">
+      <span class="lb-rank">${rank}</span>
+      <span class="lb-name">${esc(entry.player_name)}</span>
+      <span class="lb-score">${entry.score}</span>
+    </li>`;
+  }).join('');
+
+  if (leaderboardExpanded) {
+    list.classList.add('lb-expanded');
+  } else {
+    list.classList.remove('lb-expanded');
+  }
+}
+
+function toggleLeaderboard() {
+  leaderboardExpanded = !leaderboardExpanded;
+  const toggle = document.getElementById('lbToggle');
+  if (leaderboardExpanded) {
+    toggle.textContent = 'Show less';
+    loadLeaderboard(50);
+  } else {
+    toggle.textContent = 'Show all';
+    loadLeaderboard(5);
+  }
+}
+
+async function submitScore(name, sc) {
+  try {
+    await fetch(API_BASE + '/api/score', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ player_name: name, score: sc }),
+    });
+  } catch (e) { /* ignore */ }
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ---- Game Start Flow ----
+function handleStartGame() {
+  // Try Telegram username first
+  if (!playerName && tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
+    playerName = tg.initDataUnsafe.user.first_name || '';
+  }
+  // Try localStorage
+  if (!playerName) {
+    playerName = localStorage.getItem('barber_snake_name') || '';
+  }
+
+  if (playerName) {
+    startGame();
+  } else {
+    document.getElementById('nameOverlay').classList.remove('hidden');
+    document.getElementById('playerNameInput').value = '';
+    document.getElementById('playerNameInput').focus();
+  }
+}
+
+function startGameWithName() {
+  const input = document.getElementById('playerNameInput').value.trim();
+  if (!input) return;
+  playerName = input;
+  localStorage.setItem('barber_snake_name', playerName);
+  document.getElementById('nameOverlay').classList.add('hidden');
+  startGame();
+}
+
+function startGame() {
+  const canvas = setupCanvas();
+  document.getElementById('menuScreen').classList.add('hidden');
+  document.getElementById('gameScreen').classList.remove('hidden');
+
+  const startCol = Math.floor(COLS / 2);
+  const startRow = Math.floor(ROWS / 2);
+  snake = [{ x: startCol, y: startRow }];
+  direction = { x: 1, y: 0 };
+  nextDirection = { x: 1, y: 0 };
+  score = 0;
+  currentSpeed = BASE_SPEED;
+  document.getElementById('scoreText').textContent = '0';
+  placeFood();
+  gameRunning = true;
+
+  if (gameLoop) clearInterval(gameLoop);
+  gameLoop = setInterval(tick, currentSpeed);
+  cancelAnimationFrame(animFrame);
+  animLoop();
+}
+
+function updateSpeed() {
+  const newSpeed = Math.max(MIN_SPEED, BASE_SPEED - Math.floor(score / 10) * SPEED_DECREASE);
+  if (newSpeed !== currentSpeed) {
+    currentSpeed = newSpeed;
+    clearInterval(gameLoop);
+    gameLoop = setInterval(tick, currentSpeed);
+  }
+}
+
+// ---- Game Logic ----
+function placeFood() {
+  let pos;
+  do {
+    pos = { x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS) };
+  } while (snake.some(s => s.x === pos.x && s.y === pos.y));
+  food = pos;
+}
+
+function tick() {
+  if (!gameRunning) return;
+
+  direction = nextDirection;
+  const head = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
+
+  if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) return endGame();
+  if (snake.some(s => s.x === head.x && s.y === head.y)) return endGame();
+
+  snake.unshift(head);
+
+  if (head.x === food.x && head.y === food.y) {
+    score += 10;
+    document.getElementById('scoreText').textContent = score;
+    showScoreGlow();
+    showFloatingScore(food.x, food.y);
+    haptic('light');
+    placeFood();
+    updateSpeed();
+  } else {
+    snake.pop();
+  }
+}
+
+// ---- Rendering ----
+function draw() {
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+
+  // Background
+  ctx.fillStyle = '#0f0f23';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Grid
+  ctx.strokeStyle = 'rgba(212, 175, 55, 0.04)';
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i <= COLS; i++) {
+    ctx.beginPath(); ctx.moveTo(i * CELL, 0); ctx.lineTo(i * CELL, ROWS * CELL); ctx.stroke();
+  }
+  for (let i = 0; i <= ROWS; i++) {
+    ctx.beginPath(); ctx.moveTo(0, i * CELL); ctx.lineTo(COLS * CELL, i * CELL); ctx.stroke();
+  }
+
+  // Snake
+  snake.forEach((seg, i) => {
+    const t = snake.length > 1 ? i / (snake.length - 1) : 0;
+    const r = lerp(212, 100, t);
+    const g = lerp(175, 80, t);
+    const b = lerp(55, 20, t);
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+
+    const pad = i === 0 ? 0.5 : 1.5;
+    ctx.beginPath();
+    ctx.roundRect(seg.x * CELL + pad, seg.y * CELL + pad, CELL - pad * 2, CELL - pad * 2, 4);
+    ctx.fill();
+
+    // Eyes on head
+    if (i === 0) {
+      ctx.fillStyle = '#0f0f23';
+      const cx = seg.x * CELL + CELL / 2;
+      const cy = seg.y * CELL + CELL / 2;
+      const eyeOff = CELL * 0.18;
+      const eyeR = CELL * 0.1;
+
+      if (direction.x === 1) {
+        ctx.beginPath(); ctx.arc(cx + eyeOff, cy - eyeOff, eyeR, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(cx + eyeOff, cy + eyeOff, eyeR, 0, Math.PI * 2); ctx.fill();
+      } else if (direction.x === -1) {
+        ctx.beginPath(); ctx.arc(cx - eyeOff, cy - eyeOff, eyeR, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(cx - eyeOff, cy + eyeOff, eyeR, 0, Math.PI * 2); ctx.fill();
+      } else if (direction.y === -1) {
+        ctx.beginPath(); ctx.arc(cx - eyeOff, cy - eyeOff, eyeR, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(cx + eyeOff, cy - eyeOff, eyeR, 0, Math.PI * 2); ctx.fill();
+      } else {
+        ctx.beginPath(); ctx.arc(cx - eyeOff, cy + eyeOff, eyeR, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(cx + eyeOff, cy + eyeOff, eyeR, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  });
+
+  // Food (pulsing red)
+  const pulse = 1 + Math.sin(Date.now() / 200) * 0.15;
+  const foodR = (CELL / 2 - 2) * pulse;
+  ctx.fillStyle = '#E74C3C';
+  ctx.shadowColor = '#E74C3C';
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.arc(food.x * CELL + CELL / 2, food.y * CELL + CELL / 2, foodR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // Floating scores
+  drawFloatingScores(ctx);
+}
+
+function lerp(a, b, t) { return Math.round(a + (b - a) * t); }
+
+// ---- Score Animations ----
+function showScoreGlow() {
+  const el = document.getElementById('scoreDisplay');
+  el.classList.add('glow');
+  setTimeout(() => el.classList.remove('glow'), 400);
+}
+
+function showFloatingScore(fx, fy) {
+  const canvas = document.getElementById('gameCanvas');
+  const rect = canvas.getBoundingClientRect();
+  const popup = document.createElement('div');
+  popup.className = 'score-popup';
+  popup.textContent = '+10';
+  popup.style.left = (rect.left + fx * CELL + CELL / 2 - 12) + 'px';
+  popup.style.top = (rect.top + fy * CELL) + 'px';
+  document.body.appendChild(popup);
+  setTimeout(() => popup.remove(), 800);
+}
+
+function drawFloatingScores(ctx) { /* handled by DOM popups */ }
+
+// ---- Game Over ----
+async function endGame() {
+  gameRunning = false;
+  clearInterval(gameLoop);
+  cancelAnimationFrame(animFrame);
+  haptic('heavy');
+
+  await submitScore(playerName, score);
+
+  // Determine rank
+  let rank = 1;
+  try {
+    const res = await fetch(API_BASE + '/api/leaderboard?limit=100');
+    const allScores = await res.json();
+    rank = allScores.filter(s => s.score > score).length + 1;
+  } catch (e) { /* ignore */ }
+
+  // Count-up animation for score
+  const finalEl = document.getElementById('finalScore');
+  const rankEl = document.getElementById('rankText');
+  finalEl.textContent = '0';
+  rankEl.textContent = 'You placed #' + rank + '!';
+  document.getElementById('gameOverOverlay').classList.remove('hidden');
+
+  let current = 0;
+  const step = Math.max(1, Math.floor(score / 30));
+  const counter = setInterval(() => {
+    current = Math.min(current + step, score);
+    finalEl.textContent = current;
+    if (current >= score) clearInterval(counter);
+  }, 30);
+
+  // Confetti for top 3
+  if (rank <= 3) spawnConfetti();
+}
+
+function spawnConfetti() {
+  const colors = ['#D4AF37', '#E74C3C', '#3498DB', '#2ECC71', '#F39C12', '#fff'];
+  for (let i = 0; i < 40; i++) {
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    piece.style.left = Math.random() * 100 + 'vw';
+    piece.style.top = -10 + 'px';
+    piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+    piece.style.animationDelay = Math.random() * 0.6 + 's';
+    piece.style.animationDuration = (1 + Math.random()) + 's';
+    document.body.appendChild(piece);
+    setTimeout(() => piece.remove(), 2500);
+  }
+}
+
+function backToMenu() {
+  document.getElementById('gameOverOverlay').classList.add('hidden');
+  document.getElementById('gameScreen').classList.add('hidden');
+  document.getElementById('menuScreen').classList.remove('hidden');
+  leaderboardExpanded = false;
+  document.getElementById('lbToggle').textContent = 'Show all';
+  loadLeaderboard(5);
+}
+
+function playAgain() {
+  document.getElementById('gameOverOverlay').classList.add('hidden');
+  startGame();
+}
+
+// ---- D-Pad Controls ----
+function dpadPress(dir, event) {
+  event.preventDefault();
+  if (!gameRunning) return;
+  haptic('light');
+  switch (dir) {
+    case 'up':    if (direction.y !== 1)  nextDirection = { x: 0, y: -1 }; break;
+    case 'down':  if (direction.y !== -1) nextDirection = { x: 0, y: 1 };  break;
+    case 'left':  if (direction.x !== 1)  nextDirection = { x: -1, y: 0 }; break;
+    case 'right': if (direction.x !== -1) nextDirection = { x: 1, y: 0 };  break;
+  }
+}
+
+// ---- Keyboard Controls (desktop) ----
+document.addEventListener('keydown', (e) => {
+  if (!gameRunning) {
+    if (e.key === 'Enter') {
+      const overlay = document.getElementById('nameOverlay');
+      if (!overlay.classList.contains('hidden')) startGameWithName();
+    }
+    return;
+  }
+  switch (e.key) {
+    case 'ArrowUp':    if (direction.y !== 1)  nextDirection = { x: 0, y: -1 }; break;
+    case 'ArrowDown':  if (direction.y !== -1) nextDirection = { x: 0, y: 1 };  break;
+    case 'ArrowLeft':  if (direction.x !== 1)  nextDirection = { x: -1, y: 0 }; break;
+    case 'ArrowRight': if (direction.x !== -1) nextDirection = { x: 1, y: 0 };  break;
+  }
+  e.preventDefault();
+});
+
+// Prevent scroll during game
+document.addEventListener('touchmove', (e) => {
+  if (gameRunning) e.preventDefault();
+}, { passive: false });
+
+// ---- Haptic Feedback ----
+function haptic(style) {
+  try {
+    if (tg && tg.HapticFeedback) {
+      tg.HapticFeedback.impactOccurred(style);
+    }
+  } catch (e) { /* ignore */ }
+}
+
+// ---- Animation loop for pulsing food ----
+let animFrame;
+function animLoop() {
+  if (gameRunning) draw();
+  animFrame = requestAnimationFrame(animLoop);
+}
+
+// ---- Init ----
+loadLeaderboard(5);
+</script>
+</body>
+</html>
